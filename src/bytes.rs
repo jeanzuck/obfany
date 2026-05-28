@@ -102,9 +102,54 @@ macro_rules! obfcstr {
 /// See [`obfstr!`] for more information.
 #[macro_export]
 macro_rules! obfstring {
-	($s:expr) => {
-		String::from($crate::obfstr!($s))
-	};
+    ($s:expr) => {
+        String::from($crate::obfstr!($s))
+    };
+}
+
+/// Compiletime number constant obfuscation.
+///
+/// Stores an integer or float constant in XOR-encrypted form inside the binary.
+/// The plaintext value is only reconstructed at runtime using a compile-time keystream,
+/// making it harder for static analysis tools to find the original value.
+///
+/// Works with all primitive numeric types: `u8`, `u16`, `u32`, `u64`, `u128`,
+/// `i8`, `i16`, `i32`, `i64`, `i128`, `usize`, `isize`, `f32`, `f64`.
+///
+/// The return type is inferred from the surrounding context. Annotate the binding
+/// type or use a typed literal suffix if inference is ambiguous.
+///
+/// ```
+/// let secret: u32 = obfstr::num!(0x1234_u32);
+/// assert_eq!(secret, 0x1234_u32);
+///
+/// let score: i64 = obfstr::num!(-9999_i64);
+/// assert_eq!(score, -9999_i64);
+///
+/// let pi: f64 = obfstr::num!(3.14159265358979_f64);
+/// assert!((pi - std::f64::consts::PI).abs() < 1e-10);
+/// ```
+#[macro_export]
+macro_rules! num {
+    ($val:expr) => {{
+        use ::core::primitive::*;
+        const _OBFNUM_SIZE: usize = ::core::mem::size_of_val(&{ $val });
+        const _OBFNUM_PLAIN: [u8; _OBFNUM_SIZE] = unsafe { ::core::mem::transmute({ $val }) };
+        const _OBFNUM_KEYSTREAM: [u8; _OBFNUM_SIZE] = $crate::bytes::keystream::<_OBFNUM_SIZE>(
+            $crate::random!(u32, "obfnum_key", stringify!($val)),
+        );
+        static _OBFNUM_SDATA: [u8; _OBFNUM_SIZE] =
+            $crate::bytes::obfuscate::<_OBFNUM_SIZE>(&_OBFNUM_PLAIN, &_OBFNUM_KEYSTREAM);
+        let _obfnum_deobf: [u8; _OBFNUM_SIZE] = $crate::bytes::deobfuscate::<_OBFNUM_SIZE>(
+            $crate::xref::xref::<
+                _,
+                { $crate::random!(u32, "obfnum_offset", stringify!($val)) },
+                { $crate::random!(u64, "obfnum_xref", stringify!($val)) },
+            >(&_OBFNUM_SDATA),
+            &_OBFNUM_KEYSTREAM,
+        );
+        unsafe { ::core::mem::transmute_copy(&_obfnum_deobf) }
+    }};
 }
 
 /// Compiletime byte string obfuscation.
@@ -130,249 +175,285 @@ macro_rules! obfbytes {
 #[doc(hidden)]
 #[macro_export]
 macro_rules! __obfbytes {
-	($s:expr) => {{
-		use ::core::primitive::*;
-		const _OBFBYTES_STRING: &[u8] = $s;
-		const _OBFBYTES_LEN: usize = _OBFBYTES_STRING.len();
-		const _OBFBYTES_KEYSTREAM: [u8; _OBFBYTES_LEN] = $crate::bytes::keystream::<_OBFBYTES_LEN>($crate::random!(u32, "key", stringify!($s)));
-		static _OBFBYTES_SDATA: [u8; _OBFBYTES_LEN] = $crate::bytes::obfuscate::<_OBFBYTES_LEN>(_OBFBYTES_STRING, &_OBFBYTES_KEYSTREAM);
-		$crate::bytes::deobfuscate::<_OBFBYTES_LEN>(
-			$crate::xref::xref::<_,
-				{$crate::random!(u32, "offset", stringify!($s))},
-				{$crate::random!(u64, "xref", stringify!($s))}>
-				(&_OBFBYTES_SDATA),
-			&_OBFBYTES_KEYSTREAM)
-	}};
+    ($s:expr) => {{
+        use ::core::primitive::*;
+        const _OBFBYTES_STRING: &[u8] = $s;
+        const _OBFBYTES_LEN: usize = _OBFBYTES_STRING.len();
+        const _OBFBYTES_KEYSTREAM: [u8; _OBFBYTES_LEN] =
+            $crate::bytes::keystream::<_OBFBYTES_LEN>($crate::random!(u32, "key", stringify!($s)));
+        static _OBFBYTES_SDATA: [u8; _OBFBYTES_LEN] =
+            $crate::bytes::obfuscate::<_OBFBYTES_LEN>(_OBFBYTES_STRING, &_OBFBYTES_KEYSTREAM);
+        $crate::bytes::deobfuscate::<_OBFBYTES_LEN>(
+            $crate::xref::xref::<
+                _,
+                { $crate::random!(u32, "offset", stringify!($s)) },
+                { $crate::random!(u64, "xref", stringify!($s)) },
+            >(&_OBFBYTES_SDATA),
+            &_OBFBYTES_KEYSTREAM,
+        )
+    }};
 }
 
 // Simple XorShift to generate the key stream.
 // Security doesn't matter, we just want a number of random-looking bytes.
 #[inline(always)]
 const fn next_round(mut x: u32) -> u32 {
-	x ^= x << 13;
-	x ^= x >> 17;
-	x ^= x << 5;
-	return x;
+    x ^= x << 13;
+    x ^= x >> 17;
+    x ^= x << 5;
+    return x;
 }
 
 /// Generate the key stream for array of given length.
 #[inline(always)]
 pub const fn keystream<const LEN: usize>(key: u32) -> [u8; LEN] {
-	let mut keys = [0u8; LEN];
-	let mut round_key = key;
-	let mut i = 0;
-	// Calculate the key stream in chunks of 4 bytes
-	while i < LEN & !3 {
-		round_key = next_round(round_key);
-		let kb = round_key.to_ne_bytes();
-		keys[i + 0] = kb[0];
-		keys[i + 1] = kb[1];
-		keys[i + 2] = kb[2];
-		keys[i + 3] = kb[3];
-		i += 4;
-	}
-	// Calculate the remaining bytes of the key stream
-	round_key = next_round(round_key);
-	let kb = round_key.to_ne_bytes();
-	match LEN % 4 {
-		1 => {
-			keys[i + 0] = kb[0];
-		},
-		2 => {
-			keys[i + 0] = kb[0];
-			keys[i + 1] = kb[1];
-		},
-		3 => {
-			keys[i + 0] = kb[0];
-			keys[i + 1] = kb[1];
-			keys[i + 2] = kb[2];
-		},
-		_ => (),
-	}
-	return keys;
+    let mut keys = [0u8; LEN];
+    let mut round_key = key;
+    let mut i = 0;
+    // Calculate the key stream in chunks of 4 bytes
+    while i < LEN & !3 {
+        round_key = next_round(round_key);
+        let kb = round_key.to_ne_bytes();
+        keys[i + 0] = kb[0];
+        keys[i + 1] = kb[1];
+        keys[i + 2] = kb[2];
+        keys[i + 3] = kb[3];
+        i += 4;
+    }
+    // Calculate the remaining bytes of the key stream
+    round_key = next_round(round_key);
+    let kb = round_key.to_ne_bytes();
+    match LEN % 4 {
+        1 => {
+            keys[i + 0] = kb[0];
+        }
+        2 => {
+            keys[i + 0] = kb[0];
+            keys[i + 1] = kb[1];
+        }
+        3 => {
+            keys[i + 0] = kb[0];
+            keys[i + 1] = kb[1];
+            keys[i + 2] = kb[2];
+        }
+        _ => (),
+    }
+    return keys;
 }
 
 /// Obfuscates the input string and given key stream.
 #[inline(always)]
 pub const fn obfuscate<const LEN: usize>(s: &[u8], k: &[u8; LEN]) -> [u8; LEN] {
-	if s.len() != LEN {
-		panic!("input string len not equal to key stream len");
-	}
-	let mut data = [0u8; LEN];
-	let mut i = 0usize;
-	while i < LEN {
-		data[i] = s[i] ^ k[i];
-		i += 1;
-	}
-	return data;
+    if s.len() != LEN {
+        panic!("input string len not equal to key stream len");
+    }
+    let mut data = [0u8; LEN];
+    let mut i = 0usize;
+    while i < LEN {
+        data[i] = s[i] ^ k[i];
+        i += 1;
+    }
+    return data;
 }
 
 /// Deobfuscates the obfuscated input string and given key stream.
 #[inline(always)]
 pub fn deobfuscate<const LEN: usize>(s: &[u8; LEN], k: &[u8; LEN]) -> [u8; LEN] {
-	let mut buf = [0u8; LEN];
-	let mut i = 0;
-	// Try to tickle the LLVM optimizer in _just_ the right way
-	// Use `read_volatile` to avoid constant folding a specific read and optimize the rest
-	// Volatile reads of any size larger than 8 bytes appears to cause a bunch of one byte reads
-	// Hand optimize in chunks of 8 and 4 bytes to avoid this
-	unsafe {
-		let src = s.as_ptr();
-		let dest = buf.as_mut_ptr();
-		// Process in chunks of 8 bytes on 64-bit targets
-		#[cfg(target_pointer_width = "64")]
-		while i < LEN & !7 {
-			let ct = read_volatile(src.offset(i as isize) as *const [u8; 8]);
-			let tmp = u64::from_ne_bytes([ct[0], ct[1], ct[2], ct[3], ct[4], ct[5], ct[6], ct[7]]) ^
-				u64::from_ne_bytes([k[i + 0], k[i + 1], k[i + 2], k[i + 3], k[i + 4], k[i + 5], k[i + 6], k[i + 7]]);
-			write(dest.offset(i as isize) as *mut [u8; 8], tmp.to_ne_bytes());
-			i += 8;
-		}
-		// Process in chunks of 4 bytes
-		while i < LEN & !3 {
-			let ct = read_volatile(src.offset(i as isize) as *const [u8; 4]);
-			let tmp = u32::from_ne_bytes([ct[0], ct[1], ct[2], ct[3]]) ^
-				u32::from_ne_bytes([k[i + 0], k[i + 1], k[i + 2], k[i + 3]]);
-			write(dest.offset(i as isize) as *mut [u8; 4], tmp.to_ne_bytes());
-			i += 4;
-		}
-		// Process the remaining bytes
-		match LEN % 4 {
-			1 => {
-				let ct = read_volatile(src.offset(i as isize));
-				write(dest.offset(i as isize), ct ^ k[i]);
-			},
-			2 => {
-				let ct = read_volatile(src.offset(i as isize) as *const [u8; 2]);
-				write(dest.offset(i as isize) as *mut [u8; 2], [
-					ct[0] ^ k[i + 0],
-					ct[1] ^ k[i + 1],
-				]);
-			},
-			3 => {
-				let ct = read_volatile(src.offset(i as isize) as *const [u8; 3]);
-				write(dest.offset(i as isize) as *mut [u8; 2], [
-					ct[0] ^ k[i + 0],
-					ct[1] ^ k[i + 1],
-				]);
-				write(dest.offset(i as isize + 2), ct[2] ^ k[i + 2]);
-			},
-			_ => (),
-		}
-	}
-	return buf;
+    let mut buf = [0u8; LEN];
+    let mut i = 0;
+    // Try to tickle the LLVM optimizer in _just_ the right way
+    // Use `read_volatile` to avoid constant folding a specific read and optimize the rest
+    // Volatile reads of any size larger than 8 bytes appears to cause a bunch of one byte reads
+    // Hand optimize in chunks of 8 and 4 bytes to avoid this
+    unsafe {
+        let src = s.as_ptr();
+        let dest = buf.as_mut_ptr();
+        // Process in chunks of 8 bytes on 64-bit targets
+        #[cfg(target_pointer_width = "64")]
+        while i < LEN & !7 {
+            let ct = read_volatile(src.offset(i as isize) as *const [u8; 8]);
+            let tmp = u64::from_ne_bytes([ct[0], ct[1], ct[2], ct[3], ct[4], ct[5], ct[6], ct[7]])
+                ^ u64::from_ne_bytes([
+                    k[i + 0],
+                    k[i + 1],
+                    k[i + 2],
+                    k[i + 3],
+                    k[i + 4],
+                    k[i + 5],
+                    k[i + 6],
+                    k[i + 7],
+                ]);
+            write(dest.offset(i as isize) as *mut [u8; 8], tmp.to_ne_bytes());
+            i += 8;
+        }
+        // Process in chunks of 4 bytes
+        while i < LEN & !3 {
+            let ct = read_volatile(src.offset(i as isize) as *const [u8; 4]);
+            let tmp = u32::from_ne_bytes([ct[0], ct[1], ct[2], ct[3]])
+                ^ u32::from_ne_bytes([k[i + 0], k[i + 1], k[i + 2], k[i + 3]]);
+            write(dest.offset(i as isize) as *mut [u8; 4], tmp.to_ne_bytes());
+            i += 4;
+        }
+        // Process the remaining bytes
+        match LEN % 4 {
+            1 => {
+                let ct = read_volatile(src.offset(i as isize));
+                write(dest.offset(i as isize), ct ^ k[i]);
+            }
+            2 => {
+                let ct = read_volatile(src.offset(i as isize) as *const [u8; 2]);
+                write(
+                    dest.offset(i as isize) as *mut [u8; 2],
+                    [ct[0] ^ k[i + 0], ct[1] ^ k[i + 1]],
+                );
+            }
+            3 => {
+                let ct = read_volatile(src.offset(i as isize) as *const [u8; 3]);
+                write(
+                    dest.offset(i as isize) as *mut [u8; 2],
+                    [ct[0] ^ k[i + 0], ct[1] ^ k[i + 1]],
+                );
+                write(dest.offset(i as isize + 2), ct[2] ^ k[i + 2]);
+            }
+            _ => (),
+        }
+    }
+    return buf;
 }
 
 #[inline(always)]
 pub fn equals<const LEN: usize>(s: &[u8; LEN], k: &[u8; LEN], other: &[u8]) -> bool {
-	if other.len() != LEN {
-		return false;
-	}
-	let mut i = 0;
-	// Try to tickle the LLVM optimizer in _just_ the right way
-	// Use `read_volatile` to avoid constant folding a specific read and optimize the rest
-	// Volatile reads of any size larger than 8 bytes appears to cause a bunch of one byte reads
-	// Hand optimize in chunks of 8 and 4 bytes to avoid this
-	unsafe {
-		let src = s.as_ptr();
-		// Process in chunks of 8 bytes on 64-bit targets
-		#[cfg(target_pointer_width = "64")]
-		while i < LEN & !7 {
-			let ct = read_volatile(src.offset(i as isize) as *const [u8; 8]);
-			let tmp = u64::from_ne_bytes([ct[0], ct[1], ct[2], ct[3], ct[4], ct[5], ct[6], ct[7]]) ^
-				u64::from_ne_bytes([k[i + 0], k[i + 1], k[i + 2], k[i + 3], k[i + 4], k[i + 5], k[i + 6], k[i + 7]]);
-			let other = u64::from_ne_bytes([other[i + 0], other[i + 1], other[i + 2], other[i + 3], other[i + 4], other[i + 5], other[i + 6], other[i + 7]]);
-			if tmp != other {
-				return false;
-			}
-			i += 8;
-		}
-		// Process in chunks of 4 bytes
-		while i < LEN & !3 {
-			let ct = read_volatile(src.offset(i as isize) as *const [u8; 4]);
-			let tmp = u32::from_ne_bytes([ct[0], ct[1], ct[2], ct[3]]) ^
-				u32::from_ne_bytes([k[i + 0], k[i + 1], k[i + 2], k[i + 3]]);
-			let other = u32::from_ne_bytes([other[i + 0], other[i + 1], other[i + 2], other[i + 3]]);
-			if tmp != other {
-				return false;
-			}
-			i += 4;
-		}
-		// Process the remaining bytes
-		match LEN % 4 {
-			1 => {
-				let ct = read_volatile(src.offset(i as isize));
-				ct ^ k[i] == other[i]
-			},
-			2 => {
-				let ct = read_volatile(src.offset(i as isize) as *const [u8; 2]);
-				u16::from_ne_bytes([ct[0], ct[1]]) ^ u16::from_ne_bytes([k[i + 0], k[i + 1]]) == u16::from_ne_bytes([other[i + 0], other[i + 1]])
-			},
-			3 => {
-				let ct = read_volatile(src.offset(i as isize) as *const [u8; 3]);
-				u32::from_ne_bytes([ct[0], ct[1], ct[2], 0]) ^ u32::from_ne_bytes([k[i + 0], k[i + 1], k[i + 2], 0]) == u32::from_ne_bytes([other[i + 0], other[i + 1], other[i + 2], 0])
-			},
-			_ => true,
-		}
-	}
+    if other.len() != LEN {
+        return false;
+    }
+    let mut i = 0;
+    // Try to tickle the LLVM optimizer in _just_ the right way
+    // Use `read_volatile` to avoid constant folding a specific read and optimize the rest
+    // Volatile reads of any size larger than 8 bytes appears to cause a bunch of one byte reads
+    // Hand optimize in chunks of 8 and 4 bytes to avoid this
+    unsafe {
+        let src = s.as_ptr();
+        // Process in chunks of 8 bytes on 64-bit targets
+        #[cfg(target_pointer_width = "64")]
+        while i < LEN & !7 {
+            let ct = read_volatile(src.offset(i as isize) as *const [u8; 8]);
+            let tmp = u64::from_ne_bytes([ct[0], ct[1], ct[2], ct[3], ct[4], ct[5], ct[6], ct[7]])
+                ^ u64::from_ne_bytes([
+                    k[i + 0],
+                    k[i + 1],
+                    k[i + 2],
+                    k[i + 3],
+                    k[i + 4],
+                    k[i + 5],
+                    k[i + 6],
+                    k[i + 7],
+                ]);
+            let other = u64::from_ne_bytes([
+                other[i + 0],
+                other[i + 1],
+                other[i + 2],
+                other[i + 3],
+                other[i + 4],
+                other[i + 5],
+                other[i + 6],
+                other[i + 7],
+            ]);
+            if tmp != other {
+                return false;
+            }
+            i += 8;
+        }
+        // Process in chunks of 4 bytes
+        while i < LEN & !3 {
+            let ct = read_volatile(src.offset(i as isize) as *const [u8; 4]);
+            let tmp = u32::from_ne_bytes([ct[0], ct[1], ct[2], ct[3]])
+                ^ u32::from_ne_bytes([k[i + 0], k[i + 1], k[i + 2], k[i + 3]]);
+            let other =
+                u32::from_ne_bytes([other[i + 0], other[i + 1], other[i + 2], other[i + 3]]);
+            if tmp != other {
+                return false;
+            }
+            i += 4;
+        }
+        // Process the remaining bytes
+        match LEN % 4 {
+            1 => {
+                let ct = read_volatile(src.offset(i as isize));
+                ct ^ k[i] == other[i]
+            }
+            2 => {
+                let ct = read_volatile(src.offset(i as isize) as *const [u8; 2]);
+                u16::from_ne_bytes([ct[0], ct[1]]) ^ u16::from_ne_bytes([k[i + 0], k[i + 1]])
+                    == u16::from_ne_bytes([other[i + 0], other[i + 1]])
+            }
+            3 => {
+                let ct = read_volatile(src.offset(i as isize) as *const [u8; 3]);
+                u32::from_ne_bytes([ct[0], ct[1], ct[2], 0])
+                    ^ u32::from_ne_bytes([k[i + 0], k[i + 1], k[i + 2], 0])
+                    == u32::from_ne_bytes([other[i + 0], other[i + 1], other[i + 2], 0])
+            }
+            _ => true,
+        }
+    }
 }
 
 // Test correct processing of less than multiple of 8 lengths
 #[test]
 fn test_remaining_bytes() {
-	const STRING: &[u8] = b"01234567ABCDEFGHI";
-	fn test<const LEN: usize>(key: u32) {
-		let keys = keystream::<LEN>(key);
-		let data = obfuscate::<LEN>(&STRING[..LEN], &keys);
-		let buffer = deobfuscate::<LEN>(&data, &keys);
-		// Ciphertext should not equal input string
-		assert_ne!(&data[..], &STRING[..LEN]);
-		// Deobfuscated result should equal input string
-		assert_eq!(&buffer[..], &STRING[..LEN]);
-		// Specialized equals check should succeed
-		assert!(equals::<LEN>(&data, &keys, &STRING[..LEN]));
-	}
-	test::<8>(0x1111);
-	test::<9>(0x2222);
-	test::<10>(0x3333);
-	test::<11>(0x4444);
-	test::<12>(0x5555);
-	test::<13>(0x6666);
-	test::<14>(0x7777);
-	test::<15>(0x8888);
-	test::<16>(0x9999);
+    const STRING: &[u8] = b"01234567ABCDEFGHI";
+    fn test<const LEN: usize>(key: u32) {
+        let keys = keystream::<LEN>(key);
+        let data = obfuscate::<LEN>(&STRING[..LEN], &keys);
+        let buffer = deobfuscate::<LEN>(&data, &keys);
+        // Ciphertext should not equal input string
+        assert_ne!(&data[..], &STRING[..LEN]);
+        // Deobfuscated result should equal input string
+        assert_eq!(&buffer[..], &STRING[..LEN]);
+        // Specialized equals check should succeed
+        assert!(equals::<LEN>(&data, &keys, &STRING[..LEN]));
+    }
+    test::<8>(0x1111);
+    test::<9>(0x2222);
+    test::<10>(0x3333);
+    test::<11>(0x4444);
+    test::<12>(0x5555);
+    test::<13>(0x6666);
+    test::<14>(0x7777);
+    test::<15>(0x8888);
+    test::<16>(0x9999);
 }
 
 #[test]
 fn test_equals() {
-	const STRING: &str = "Hello ðŸŒ";
-	const LEN: usize = STRING.len();
-	const KEYSTREAM: [u8; LEN] = keystream::<LEN>(0x10203040);
-	const OBFSTRING: [u8; LEN] = obfuscate::<LEN>(STRING.as_bytes(), &KEYSTREAM);
-	assert!(equals::<LEN>(&OBFSTRING, &KEYSTREAM, STRING.as_bytes()));
+    const STRING: &str = "Hello ðŸŒ";
+    const LEN: usize = STRING.len();
+    const KEYSTREAM: [u8; LEN] = keystream::<LEN>(0x10203040);
+    const OBFSTRING: [u8; LEN] = obfuscate::<LEN>(STRING.as_bytes(), &KEYSTREAM);
+    assert!(equals::<LEN>(&OBFSTRING, &KEYSTREAM, STRING.as_bytes()));
 }
 
 #[test]
 fn test_obfstr_let() {
-	obfstr! {
-		let abc = "abc";
-		let def = "defdef";
-	}
-	assert_eq!(abc, "abc");
-	assert_eq!(def, "defdef");
+    obfstr! {
+        let abc = "abc";
+        let def = "defdef";
+    }
+    assert_eq!(abc, "abc");
+    assert_eq!(def, "defdef");
 }
 
 #[test]
 fn test_obfstr_const() {
-	assert_eq!(obfstr!("\u{20}\0"), " \0");
-	assert_eq!(obfstr!("\"\n\t\\\'\""), "\"\n\t\\\'\"");
+    assert_eq!(obfstr!("\u{20}\0"), " \0");
+    assert_eq!(obfstr!("\"\n\t\\\'\""), "\"\n\t\\\'\"");
 
-	const LONG_STRING: &str = "This literal is very very very long to see if it correctly handles long strings";
-	assert_eq!(obfstr!(LONG_STRING), LONG_STRING);
+    const LONG_STRING: &str =
+        "This literal is very very very long to see if it correctly handles long strings";
+    assert_eq!(obfstr!(LONG_STRING), LONG_STRING);
 
-	const ABC: &str = "ABC";
-	const WORLD: &str = "🌍";
+    const ABC: &str = "ABC";
+    const WORLD: &str = "🌍";
 
-	assert_eq!(obfbytes!(ABC.as_bytes()), "ABC".as_bytes());
-	assert_eq!(obfbytes!(WORLD.as_bytes()), "🌍".as_bytes());
+    assert_eq!(obfbytes!(ABC.as_bytes()), "ABC".as_bytes());
+    assert_eq!(obfbytes!(WORLD.as_bytes()), "🌍".as_bytes());
 }
