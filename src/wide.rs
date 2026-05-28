@@ -7,7 +7,7 @@
 ///
 /// ```
 /// let expected = &['W' as u16, 'i' as u16, 'd' as u16, 'e' as u16, 0];
-/// assert_eq!(expected, obfstr::wide!("Wide\0"));
+/// assert_eq!(expected, obfany::wide!("Wide\0"));
 /// ```
 #[macro_export]
 macro_rules! wide {

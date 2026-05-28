@@ -14,7 +14,7 @@ use core::ptr::{read_volatile, write};
 /// The `obfstr!` macro returns the deobfuscated string as a temporary `&str` value and must be consumed in the same statement it was used:
 ///
 /// ```
-/// use obfstr::obfstr as s;
+/// use obfany::obfstr as s;
 ///
 /// const HELLO_WORLD: &str = "Hello 🌍";
 /// assert_eq!(s!(HELLO_WORLD), HELLO_WORLD);
@@ -23,7 +23,7 @@ use core::ptr::{read_volatile, write};
 /// Different syntax forms are supported to reuse the obfuscated strings in outer scopes:
 ///
 /// ```
-/// use obfstr::obfstr as s;
+/// use obfany::obfstr as s;
 ///
 /// // Obfuscate a bunch of strings
 /// s! {
@@ -73,7 +73,7 @@ macro_rules! obfstr {
 ///
 /// ```
 /// use std::ffi::CStr;
-/// use obfstr::obfcstr as cstr;
+/// use obfany::obfcstr as cstr;
 ///
 /// const HELLO_WORLD: &'static CStr = c"Hello CStr";
 /// assert_eq!(cstr!(HELLO_WORLD).to_str().unwrap(), "Hello CStr");
@@ -120,13 +120,13 @@ macro_rules! obfstring {
 /// type or use a typed literal suffix if inference is ambiguous.
 ///
 /// ```
-/// let secret: u32 = obfstr::num!(0x1234_u32);
+/// let secret: u32 = obfany::num!(0x1234_u32);
 /// assert_eq!(secret, 0x1234_u32);
 ///
-/// let score: i64 = obfstr::num!(-9999_i64);
+/// let score: i64 = obfany::num!(-9999_i64);
 /// assert_eq!(score, -9999_i64);
 ///
-/// let pi: f64 = obfstr::num!(3.14159265358979_f64);
+/// let pi: f64 = obfany::num!(3.14159265358979_f64);
 /// assert!((pi - std::f64::consts::PI).abs() < 1e-10);
 /// ```
 #[macro_export]

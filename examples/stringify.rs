@@ -4,7 +4,7 @@ The example presented here uses an enum because it can be challenging to return 
  */
 
 use std::fmt;
-use obfstr::{obfstr, obfstring, position};
+use obfany::{obfstr, obfstring, position};
 
 // Let's try to obfuscate the string representation of this enum.
 pub enum Example {

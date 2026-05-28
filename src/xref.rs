@@ -4,7 +4,7 @@ use core::hint;
 ///
 /// ```
 /// static FOO: i32 = 42;
-/// let foo = obfstr::xref!(&FOO);
+/// let foo = obfany::xref!(&FOO);
 ///
 /// // When looking at the disassembly the reference to `FOO` has been obfuscated.
 /// assert_eq!(foo as *const _, &FOO as *const _);
@@ -13,8 +13,8 @@ use core::hint;
 /// This can be used for a more lightweight obfuscation that keeps that `'static` nature of string constants:
 ///
 /// ```
-/// assert_eq!(obfstr::xref!("Hello world!"), "Hello world!");
-/// assert_eq!(obfstr::xref!(b"Byte array"), b"Byte array");
+/// assert_eq!(obfany::xref!("Hello world!"), "Hello world!");
+/// assert_eq!(obfany::xref!(b"Byte array"), b"Byte array");
 /// ```
 #[macro_export]
 macro_rules! xref {
@@ -85,7 +85,7 @@ pub fn xref<T: ?Sized, const OFFSET: u32, const SEED: u64>(p: &'static T) -> &'s
 ///
 /// ```
 /// static mut FOO: i32 = 42;
-/// let foo = obfstr::xref_mut!(unsafe { &mut FOO });
+/// let foo = obfany::xref_mut!(unsafe { &mut FOO });
 ///
 /// // When looking at the disassembly the reference to `FOO` has been obfuscated.
 /// assert_eq!(foo as *mut _, unsafe { &mut FOO } as *mut _);

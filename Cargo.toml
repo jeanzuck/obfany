@@ -1,5 +1,5 @@
 [package]
-name = "obfstr"
+name = "obfany"
 version = "0.4.4"
 edition = "2021"
 license = "MIT"

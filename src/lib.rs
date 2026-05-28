@@ -4,8 +4,8 @@ Compiletime string constant obfuscation.
 
 #![cfg_attr(not(test), no_std)]
 
-use core::str;
 use core::ffi::CStr;
+use core::str;
 
 #[doc(hidden)]
 pub mod wide;
@@ -32,22 +32,22 @@ pub mod xref;
 /// The float types generate a random value in range of `[1.0, 2.0)`.
 ///
 /// ```
-/// const RND: i32 = obfstr::random!(u8) as i32;
+/// const RND: i32 = obfany::random!(u8) as i32;
 /// assert!(RND >= 0 && RND <= 255);
-/// # const _: f32 = obfstr::random!(f32);
-/// # const _: f64 = obfstr::random!(f64);
+/// # const _: f32 = obfany::random!(f32);
+/// # const _: f64 = obfany::random!(f64);
 /// ```
 ///
 /// The behavior of the macro inside other macros can be surprising:
 ///
 /// ```
 /// // When used as top-level input to macros, random works as expected
-/// assert_ne!(obfstr::random!(u64), obfstr::random!(u64));
+/// assert_ne!(obfany::random!(u64), obfany::random!(u64));
 ///
 /// // When used inside the definition of a macro, random does not work as expected
 /// macro_rules! inside {
 /// 	() => {
-/// 		assert_eq!(obfstr::random!(u64), obfstr::random!(u64));
+/// 		assert_eq!(obfany::random!(u64), obfany::random!(u64));
 /// 	};
 /// }
 /// inside!();
@@ -56,7 +56,7 @@ pub mod xref;
 /// // Note that the seeds must evaluate to a literal!
 /// macro_rules! seeded {
 /// 	() => {
-/// 		assert_ne!(obfstr::random!(u64, "lhs"), obfstr::random!(u64, "rhs"));
+/// 		assert_ne!(obfany::random!(u64, "lhs"), obfany::random!(u64, "rhs"));
 /// 	};
 /// }
 /// seeded!();
@@ -64,7 +64,7 @@ pub mod xref;
 /// // Repeated usage in macros, random does not work as expected
 /// macro_rules! repeated {
 /// 	($($name:ident),*) => {
-/// 		$(let $name = obfstr::random!(u64, "seed");)*
+/// 		$(let $name = obfany::random!(u64, "seed");)*
 /// 	};
 /// }
 /// repeated!(a, b);
@@ -73,7 +73,7 @@ pub mod xref;
 /// // Provide additional unique seeds, random works as expected
 /// macro_rules! repeated_seeded {
 /// 	($($name:ident),*) => {
-/// 		$(let $name = obfstr::random!(u64, "seed", stringify!($name));)*
+/// 		$(let $name = obfany::random!(u64, "seed", stringify!($name));)*
 /// 	};
 /// }
 /// repeated_seeded!(c, d);
@@ -91,49 +91,141 @@ macro_rules! random {
 #[doc(hidden)]
 #[macro_export]
 macro_rules! __random_cast {
-	(u8, $seed:expr) => { $seed as u8 };
-	(u16, $seed:expr) => { $seed as u16 };
-	(u32, $seed:expr) => { $seed as u32 };
-	(u64, $seed:expr) => { $seed };
-	(usize, $seed:expr) => { $seed as usize };
-	(i8, $seed:expr) => { $seed as i8 };
-	(i16, $seed:expr) => { $seed as i16 };
-	(i32, $seed:expr) => { $seed as i32 };
-	(i64, $seed:expr) => { $seed as i64 };
-	(isize, $seed:expr) => { $seed as isize };
-	(bool, $seed:expr) => { $seed as i64 >= 0 };
+    (u8, $seed:expr) => {
+        $seed as u8
+    };
+    (u16, $seed:expr) => {
+        $seed as u16
+    };
+    (u32, $seed:expr) => {
+        $seed as u32
+    };
+    (u64, $seed:expr) => {
+        $seed
+    };
+    (usize, $seed:expr) => {
+        $seed as usize
+    };
+    (i8, $seed:expr) => {
+        $seed as i8
+    };
+    (i16, $seed:expr) => {
+        $seed as i16
+    };
+    (i32, $seed:expr) => {
+        $seed as i32
+    };
+    (i64, $seed:expr) => {
+        $seed as i64
+    };
+    (isize, $seed:expr) => {
+        $seed as isize
+    };
+    (bool, $seed:expr) => {
+        $seed as i64 >= 0
+    };
 
-	// {f32, f64}::from_bits is unstable as const fn due to issues with NaN
-	(f32, $seed:expr) => { unsafe { ::core::mem::transmute::<u32, f32>(0b0_01111111 << (f32::MANTISSA_DIGITS - 1) | ($seed as u32 >> 9)) } };
-	(f64, $seed:expr) => { unsafe { ::core::mem::transmute::<u64, f64>(0b0_01111111111 << (f64::MANTISSA_DIGITS - 1) | ($seed >> 12)) } };
+    // {f32, f64}::from_bits is unstable as const fn due to issues with NaN
+    (f32, $seed:expr) => {
+        unsafe {
+            ::core::mem::transmute::<u32, f32>(
+                0b0_01111111 << (f32::MANTISSA_DIGITS - 1) | ($seed as u32 >> 9),
+            )
+        }
+    };
+    (f64, $seed:expr) => {
+        unsafe {
+            ::core::mem::transmute::<u64, f64>(
+                0b0_01111111111 << (f64::MANTISSA_DIGITS - 1) | ($seed >> 12),
+            )
+        }
+    };
 
-	($ty:ident, $seed:expr) => { compile_error!(concat!("unsupported type: ", stringify!($ty))) };
+    ($ty:ident, $seed:expr) => {
+        compile_error!(concat!("unsupported type: ", stringify!($ty)))
+    };
 }
 
 #[test]
 fn test_random_f32() {
-	#[track_caller]
-	fn t(v: f32) {
-		assert!(v >= 1.0 && v < 2.0, "{}", v);
-	}
-	use random as r;
-	t(r!(f32));t(r!(f32));t(r!(f32));t(r!(f32));t(r!(f32));t(r!(f32));t(r!(f32));t(r!(f32));
-	t(r!(f32));t(r!(f32));t(r!(f32));t(r!(f32));t(r!(f32));t(r!(f32));t(r!(f32));t(r!(f32));
-	t(r!(f32));t(r!(f32));t(r!(f32));t(r!(f32));t(r!(f32));t(r!(f32));t(r!(f32));t(r!(f32));
-	t(r!(f32));t(r!(f32));t(r!(f32));t(r!(f32));t(r!(f32));t(r!(f32));t(r!(f32));t(r!(f32));
+    #[track_caller]
+    fn t(v: f32) {
+        assert!(v >= 1.0 && v < 2.0, "{}", v);
+    }
+    use random as r;
+    t(r!(f32));
+    t(r!(f32));
+    t(r!(f32));
+    t(r!(f32));
+    t(r!(f32));
+    t(r!(f32));
+    t(r!(f32));
+    t(r!(f32));
+    t(r!(f32));
+    t(r!(f32));
+    t(r!(f32));
+    t(r!(f32));
+    t(r!(f32));
+    t(r!(f32));
+    t(r!(f32));
+    t(r!(f32));
+    t(r!(f32));
+    t(r!(f32));
+    t(r!(f32));
+    t(r!(f32));
+    t(r!(f32));
+    t(r!(f32));
+    t(r!(f32));
+    t(r!(f32));
+    t(r!(f32));
+    t(r!(f32));
+    t(r!(f32));
+    t(r!(f32));
+    t(r!(f32));
+    t(r!(f32));
+    t(r!(f32));
+    t(r!(f32));
 }
 
 #[test]
 fn test_random_f64() {
-	#[track_caller]
-	fn t(v: f64) {
-		assert!(v >= 1.0 && v < 2.0, "{}", v);
-	}
-	use random as r;
-	t(r!(f64));t(r!(f64));t(r!(f64));t(r!(f64));t(r!(f64));t(r!(f64));t(r!(f64));t(r!(f64));
-	t(r!(f64));t(r!(f64));t(r!(f64));t(r!(f64));t(r!(f64));t(r!(f64));t(r!(f64));t(r!(f64));
-	t(r!(f64));t(r!(f64));t(r!(f64));t(r!(f64));t(r!(f64));t(r!(f64));t(r!(f64));t(r!(f64));
-	t(r!(f64));t(r!(f64));t(r!(f64));t(r!(f64));t(r!(f64));t(r!(f64));t(r!(f64));t(r!(f64));
+    #[track_caller]
+    fn t(v: f64) {
+        assert!(v >= 1.0 && v < 2.0, "{}", v);
+    }
+    use random as r;
+    t(r!(f64));
+    t(r!(f64));
+    t(r!(f64));
+    t(r!(f64));
+    t(r!(f64));
+    t(r!(f64));
+    t(r!(f64));
+    t(r!(f64));
+    t(r!(f64));
+    t(r!(f64));
+    t(r!(f64));
+    t(r!(f64));
+    t(r!(f64));
+    t(r!(f64));
+    t(r!(f64));
+    t(r!(f64));
+    t(r!(f64));
+    t(r!(f64));
+    t(r!(f64));
+    t(r!(f64));
+    t(r!(f64));
+    t(r!(f64));
+    t(r!(f64));
+    t(r!(f64));
+    t(r!(f64));
+    t(r!(f64));
+    t(r!(f64));
+    t(r!(f64));
+    t(r!(f64));
+    t(r!(f64));
+    t(r!(f64));
+    t(r!(f64));
 }
 
 /// Compiletime bitmixing.
@@ -142,11 +234,11 @@ fn test_random_f64() {
 /// See [Better Bit Mixing](https://zimbry.blogspot.com/2011/09/better-bit-mixing-improving-on.html) for reference.
 #[inline(always)]
 pub const fn splitmix(seed: u64) -> u64 {
-	let next = seed.wrapping_add(0x9e3779b97f4a7c15);
-	let mut z = next;
-	z = (z ^ (z >> 30)).wrapping_mul(0xbf58476d1ce4e5b9);
-	z = (z ^ (z >> 27)).wrapping_mul(0x94d049bb133111eb);
-	return z ^ (z >> 31);
+    let next = seed.wrapping_add(0x9e3779b97f4a7c15);
+    let mut z = next;
+    z = (z ^ (z >> 30)).wrapping_mul(0xbf58476d1ce4e5b9);
+    z = (z ^ (z >> 27)).wrapping_mul(0x94d049bb133111eb);
+    return z ^ (z >> 31);
 }
 
 /// Compiletime string constant hash.
@@ -154,14 +246,14 @@ pub const fn splitmix(seed: u64) -> u64 {
 /// Implemented using the [DJB2 hash function](http://www.cse.yorku.ca/~oz/hash.html#djb2) xor variation.
 #[inline(always)]
 pub const fn hash(s: &str) -> u32 {
-	let s = s.as_bytes();
-	let mut result = 3581u32;
-	let mut i = 0usize;
-	while i < s.len() {
-		result = result.wrapping_mul(33) ^ s[i] as u32;
-		i += 1;
-	}
-	return result;
+    let s = s.as_bytes();
+    let mut result = 3581u32;
+    let mut i = 0usize;
+    while i < s.len() {
+        result = result.wrapping_mul(33) ^ s[i] as u32;
+        i += 1;
+    }
+    return result;
 }
 
 /// Compiletime string constant hash.
@@ -170,25 +262,31 @@ pub const fn hash(s: &str) -> u32 {
 ///
 /// ```
 /// const STRING: &str = "Hello World";
-/// assert_eq!(obfstr::hash!(STRING), 0x6E4A573D);
+/// assert_eq!(obfany::hash!(STRING), 0x6E4A573D);
 /// ```
 #[macro_export]
 macro_rules! hash {
-	($s:expr) => {{ const _DJB2_HASH: u32 = $crate::hash($s); _DJB2_HASH }};
+    ($s:expr) => {{
+        const _DJB2_HASH: u32 = $crate::hash($s);
+        _DJB2_HASH
+    }};
 }
 
 /// Produces pseudorandom entropy from the given string.
 #[doc(hidden)]
 #[inline(always)]
 pub const fn entropy(string: &str) -> u64 {
-	splitmix(SEED ^ splitmix(hash(string) as u64))
+    splitmix(SEED ^ splitmix(hash(string) as u64))
 }
 
 /// Compiletime RNG seed.
 ///
-/// This value is derived from the environment variable `OBFSTR_SEED` and has a fixed value if absent.
+/// This value is derived from the environment variable `OBFANY_SEED` and has a fixed value if absent.
 /// If it changes all downstream dependents are recompiled automatically.
-pub const SEED: u64 = splitmix(hash(match option_env!("OBFSTR_SEED") { Some(seed) => seed, None => "FIXED" }) as u64);
+pub const SEED: u64 = splitmix(hash(match option_env!("OBFANY_SEED") {
+    Some(seed) => seed,
+    None => "FIXED",
+}) as u64);
 
 //----------------------------------------------------------------
 
@@ -201,19 +299,25 @@ pub mod words;
 #[doc(hidden)]
 #[inline(always)]
 pub const fn unsafe_as_str(bytes: &[u8]) -> &str {
-	// When used correctly by this crate's macros this should be safe
-	#[cfg(debug_assertions)]
-	return match str::from_utf8(bytes) { Ok(s) => s, Err(_) => panic!("invalid str") };
-	#[cfg(not(debug_assertions))]
-	return unsafe { str::from_utf8_unchecked(bytes) };
+    // When used correctly by this crate's macros this should be safe
+    #[cfg(debug_assertions)]
+    return match str::from_utf8(bytes) {
+        Ok(s) => s,
+        Err(_) => panic!("invalid str"),
+    };
+    #[cfg(not(debug_assertions))]
+    return unsafe { str::from_utf8_unchecked(bytes) };
 }
 
 #[doc(hidden)]
 #[inline(always)]
 pub const fn unsafe_as_cstr(bytes: &[u8]) -> &CStr {
-	// When used correctly by this crate's macros this should be safe
-	#[cfg(debug_assertions)]
-	return match CStr::from_bytes_with_nul(bytes) { Ok(cstr) => cstr, Err(_) => panic!("invalid cstr") };
-	#[cfg(not(debug_assertions))]
-	return unsafe { CStr::from_bytes_with_nul_unchecked(bytes) };
+    // When used correctly by this crate's macros this should be safe
+    #[cfg(debug_assertions)]
+    return match CStr::from_bytes_with_nul(bytes) {
+        Ok(cstr) => cstr,
+        Err(_) => panic!("invalid cstr"),
+    };
+    #[cfg(not(debug_assertions))]
+    return unsafe { CStr::from_bytes_with_nul_unchecked(bytes) };
 }

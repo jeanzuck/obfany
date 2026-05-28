@@ -7,9 +7,9 @@ use core::{ops, str};
 /// # Examples
 ///
 /// ```
-/// assert_eq!(obfstr::position!("haystack", "st"), 3..5);
-///# assert_eq!(obfstr::position!("haystack", "haystack"), 0..8);
-///# assert_eq!(obfstr::position!("haystack", "ck"), 6..8);
+/// assert_eq!(obfany::position!("haystack", "st"), 3..5);
+///# assert_eq!(obfany::position!("haystack", "haystack"), 0..8);
+///# assert_eq!(obfany::position!("haystack", "ck"), 6..8);
 /// ```
 ///
 /// Use this API when pooling strings in a single obfstr:
@@ -17,12 +17,12 @@ use core::{ops, str};
 /// ```
 /// const POOL: &str = concat!("Foo", "Bar", "Baz");
 ///
-/// obfstr::obfstr! { let pool = POOL; }
+/// obfany::obfstr! { let pool = POOL; }
 ///
 /// // Later, read strings from the pool
-/// let foo = &pool[obfstr::position!(POOL, "Foo")];
-/// let bar = &pool[obfstr::position!(POOL, "Bar")];
-/// let baz = &pool[obfstr::position!(POOL, "Baz")];
+/// let foo = &pool[obfany::position!(POOL, "Foo")];
+/// let bar = &pool[obfany::position!(POOL, "Bar")];
+/// let baz = &pool[obfany::position!(POOL, "Baz")];
 /// ```
 #[macro_export]
 macro_rules! position {
@@ -34,7 +34,7 @@ macro_rules! position {
 /// Produces a const-eval error if the needle is not a substring of the haystack.
 ///
 /// ```
-/// const POSITION: std::ops::Range<usize> = obfstr::position("haystack", "st");
+/// const POSITION: std::ops::Range<usize> = obfany::position("haystack", "st");
 /// assert_eq!(POSITION, 3..5);
 /// ```
 #[doc(hidden)]

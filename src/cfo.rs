@@ -33,13 +33,13 @@ pub const fn generate<const LEN: usize>(mut key: u32, mut xor: u32, stmts: &[&'s
 ///
 /// ```
 /// let mut tmp = 0;
-/// obfstr::obfstmt! {
+/// obfany::obfstmt! {
 /// 	tmp = 2;
 /// 	tmp *= 22;
 /// 	tmp -= 12;
 /// 	tmp /= 3;
 /// }
-///# obfstr::obfstmt! {}
+///# obfany::obfstmt! {}
 /// assert_eq!(tmp, 10);
 /// ```
 #[macro_export]

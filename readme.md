@@ -20,7 +20,7 @@ Examples
 The `obfstr!` macro returns the deobfuscated string as a temporary value:
 
 ```rust
-use obfstr::obfstr as s;
+use obfany::obfstr as s;
 assert_eq!(s!("Hello 🌍"), "Hello 🌍");
 ```
 
@@ -28,18 +28,18 @@ The `wide!` macro provides compiletime utf16 string constants:
 
 ```rust
 let expected = &['W' as u16, 'i' as u16, 'd' as u16, 'e' as u16, 0];
-assert_eq!(obfstr::wide!("Wide\0"), expected);
+assert_eq!(obfany::wide!("Wide\0"), expected);
 ```
 
 The `random!` macro provides compiletime random values:
 
 ```rust
-const RND: i32 = obfstr::random!(u8) as i32;
+const RND: i32 = obfany::random!(u8) as i32;
 assert!(RND >= 0 && RND <= 255);
 ```
 
 Compiletime random values are based on `file!()`, `line!()`, `column!()` and a fixed seed to ensure reproducibility.
-This fixed seed is stored as text in the environment variable `OBFSTR_SEED` and can be changed as desired.
+This fixed seed is stored as text in the environment variable `OBFANY_SEED` and can be changed as desired.
 
 License
 -------
