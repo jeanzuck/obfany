@@ -41,6 +41,17 @@ assert!(RND >= 0 && RND <= 255);
 Compiletime random values are based on `file!()`, `line!()`, `column!()` and a fixed seed to ensure reproducibility.
 This fixed seed is stored as text in the environment variable `OBFANY_SEED` and can be changed as desired.
 
+The `obfnum!` macro obfuscates numeric constants:
+
+```rust
+let secret = obfany::obfnum!(0x1234_u32);
+assert_eq!(secret, 0x1234_u32);
+```
+
+Always use a typed literal suffix (e.g. `0x1234_u32`, `-9999_i64`, `3.14_f32`) to ensure correctness.
+Supports all primitive numeric types: `u8`, `u16`, `u32`, `u64`, `u128`, `i8`, `i16`, `i32`, `i64`, `i128`, `usize`, `isize`, `f32`, `f64`.
+The value is stored XOR-encrypted in the binary and decrypted at runtime.
+
 License
 -------
 

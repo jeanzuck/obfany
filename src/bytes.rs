@@ -116,21 +116,20 @@ macro_rules! obfstring {
 /// Works with all primitive numeric types: `u8`, `u16`, `u32`, `u64`, `u128`,
 /// `i8`, `i16`, `i32`, `i64`, `i128`, `usize`, `isize`, `f32`, `f64`.
 ///
-/// The return type is inferred from the surrounding context. Annotate the binding
-/// type or use a typed literal suffix if inference is ambiguous.
+/// Always use a typed literal suffix to ensure the size matches the expected return type.
 ///
 /// ```
-/// let secret: u32 = obfany::num!(0x1234_u32);
+/// let secret: u32 = obfany::obfnum!(0x1234_u32);
 /// assert_eq!(secret, 0x1234_u32);
 ///
-/// let score: i64 = obfany::num!(-9999_i64);
+/// let score: i64 = obfany::obfnum!(-9999_i64);
 /// assert_eq!(score, -9999_i64);
 ///
-/// let pi: f64 = obfany::num!(3.14159265358979_f64);
+/// let pi: f64 = obfany::obfnum!(3.14159265358979_f64);
 /// assert!((pi - std::f64::consts::PI).abs() < 1e-10);
 /// ```
 #[macro_export]
-macro_rules! num {
+macro_rules! obfnum {
     ($val:expr) => {{
         use ::core::primitive::*;
         const _OBFNUM_SIZE: usize = ::core::mem::size_of_val(&{ $val });
