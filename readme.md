@@ -1,18 +1,18 @@
-String Obfuscation
-==================
+String and Number Obfuscation
+==============================
+
+> Forked from [obfstr](https://github.com/CasualX/obfstr) by CasualX — adds `obfnum!` macro for numeric constant obfuscation.
 
 [![MIT License](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![crates.io](https://img.shields.io/crates/v/obfstr.svg)](https://crates.io/crates/obfstr)
 [![docs.rs](https://docs.rs/obfstr/badge.svg)](https://docs.rs/obfstr)
 [![Build status](https://github.com/CasualX/obfstr/workflows/CI/badge.svg)](https://github.com/CasualX/obfstr/actions)
 
-Compiletime string constant obfuscation for Rust.
+Compiletime string and number constant obfuscation for Rust.
 
 The string constant itself is embedded in obfuscated form and deobfuscated locally.
 This reference to a temporary value must be used in the same statement it was generated.
 See the documentation for more advanced use cases.
-
-Looking for obfuscating formatting strings? See `fmtools` ([github](https://github.com/CasualX/fmtools), [crates.io](https://crates.io/crates/fmtools), [docs.rs](https://docs.rs/fmtools/0.1.2/fmtools/)) with the optional dependency `obfstr` enabled to automatically apply string obfuscation to formatting strings.
 
 Examples
 --------
@@ -44,13 +44,23 @@ This fixed seed is stored as text in the environment variable `OBFANY_SEED` and 
 The `obfnum!` macro obfuscates numeric constants:
 
 ```rust
-let secret = obfany::obfnum!(0x1234_u32);
+let secret: u32 = obfany::obfnum!(0x1234_u32);
 assert_eq!(secret, 0x1234_u32);
 ```
 
 Always use a typed literal suffix (e.g. `0x1234_u32`, `-9999_i64`, `3.14_f32`) to ensure correctness.
 Supports all primitive numeric types: `u8`, `u16`, `u32`, `u64`, `u128`, `i8`, `i16`, `i32`, `i64`, `i128`, `usize`, `isize`, `f32`, `f64`.
 The value is stored XOR-encrypted in the binary and decrypted at runtime.
+
+Credits
+-------
+
+This project is a fork of [obfstr](https://github.com/CasualX/obfstr)
+by [CasualX](https://github.com/CasualX), licensed under MIT.
+
+Changes from upstream:
+- Renamed crate to `obfany`
+- Added `obfnum!` macro for compiletime numeric constant obfuscation
 
 License
 -------
