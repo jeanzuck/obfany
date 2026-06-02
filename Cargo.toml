@@ -1,6 +1,6 @@
 [package]
 name = "obfany"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2021"
 license = "MIT"
 
@@ -8,6 +8,6 @@ authors = ["jeanzuck"]
 description = "Compiletime string and number constant obfuscation for Rust"
 documentation = "https://docs.rs/obfany"
 repository = "https://github.com/jeanzuck/obfany"
-readme = "readme.md"
+readme = "README.md"
 keywords = ["obfuscation", "string", "number", "random", "no-std"]
 categories = ["no-std"]
