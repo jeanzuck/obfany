@@ -4,9 +4,9 @@ String and Number Obfuscation
 > Forked from [obfstr](https://github.com/CasualX/obfstr) by CasualX — adds `obfnum!` macro for numeric constant obfuscation.
 
 [![MIT License](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![crates.io](https://img.shields.io/crates/v/obfstr.svg)](https://crates.io/crates/obfstr)
-[![docs.rs](https://docs.rs/obfstr/badge.svg)](https://docs.rs/obfstr)
-[![Build status](https://github.com/CasualX/obfstr/workflows/CI/badge.svg)](https://github.com/CasualX/obfstr/actions)
+[![crates.io](https://img.shields.io/crates/v/obfany.svg)](https://crates.io/crates/obfany)
+[![docs.rs](https://docs.rs/obfany/badge.svg)](https://docs.rs/obfany)
+[![Build status](https://github.com/jeanzuck/obfany/workflows/CI/badge.svg)](https://github.com/jeanzuck/obfany/actions)
 
 Compiletime string and number constant obfuscation for Rust.
 
