@@ -98,6 +98,10 @@ pub fn deobfuscate<const LEN: usize>(s: &[u16; LEN], k: &[u16; LEN]) -> [u16; LE
 	// Use `read_volatile` to avoid constant folding a specific read and optimize the rest
 	// Volatile reads of any size larger than 8 bytes appears to cause a bunch of one byte reads
 	// Hand optimize in chunks of 8 and 4 bytes to avoid this
+	// SAFETY: s and buf are valid references of the same length LEN.
+	// All pointer offsets are bounded by LEN (guaranteed by the while conditions and final if check).
+	// read_volatile and write operate on properly aligned types matching the [u16] element type.
+	// No data races: buf is a local stack variable, s is a shared reference.
 	unsafe {
 		let src = s.as_ptr();
 		let dest = buf.as_mut_ptr();

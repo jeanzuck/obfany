@@ -4,17 +4,47 @@ Control Flow Obfuscation
 */
 
 /// Generates the keys and xor values for a sequence of statements.
-pub const fn generate<const LEN: usize>(mut key: u32, mut xor: u32, stmts: &[&'static str; LEN]) -> [(&'static str, u32, u32); LEN] {
-	let mut result = [("", 0, 0); LEN];
-	let mut i = 0;
-	while i < stmts.len() {
-		key ^= xor;
-		xor = crate::murmur3(stmts[i].as_bytes(), key);
-		// FIXME! This should check for collisions...
-		result[i] = (stmts[i], key, xor);
-		i += 1;
-	}
-	result
+pub const fn generate<const LEN: usize>(
+    mut key: u32,
+    mut xor: u32,
+    stmts: &[&'static str; LEN],
+) -> [(&'static str, u32, u32); LEN] {
+    let mut result = [("", 0, 0); LEN];
+    let mut i = 0;
+    while i < stmts.len() {
+        key ^= xor;
+        xor = crate::murmur3(stmts[i].as_bytes(), key);
+        result[i] = (stmts[i], key, xor);
+        i += 1;
+    }
+    // Check for key collisions between statements to prevent infinite loops at runtime
+    let mut i = 0;
+    while i < LEN {
+        let mut j = i + 1;
+        while j < LEN {
+            if result[i].1 == result[j].1 {
+                panic!(
+                    "obfstmt: key collision detected — two statements generated the same key, try changing the statement order or adding a unique seed"
+                );
+            }
+            j += 1;
+        }
+        i += 1;
+    }
+    // Check that no statement key collides with the exit key
+    if LEN > 0 {
+        let exit_key = result[LEN - 1].1 ^ result[LEN - 1].2;
+        let mut i = 0;
+        while i < LEN {
+            if result[i].1 == exit_key {
+                panic!(
+                    "obfstmt: key collision with exit key — a statement key matches the exit key, try changing the statement order or adding a unique seed"
+                );
+            }
+            i += 1;
+        }
+    }
+    result
 }
 
 /// Statement control flow obfuscation.
@@ -93,13 +123,13 @@ macro_rules! __obfstmt_match {
 
 #[test]
 fn test_identical_stmt() {
-	let mut i: u8 = 0;
-	obfstmt! {
-		i += 1;
-		i += 1;
-		i += 1;
-		i += 1;
-	}
-	obfstmt! {}
-	assert_eq!(i, 4);
+    let mut i: u8 = 0;
+    obfstmt! {
+        i += 1;
+        i += 1;
+        i += 1;
+        i += 1;
+    }
+    obfstmt! {}
+    assert_eq!(i, 4);
 }

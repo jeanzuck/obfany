@@ -133,7 +133,7 @@ macro_rules! obfnum {
     ($val:expr) => {{
         use ::core::primitive::*;
         const _OBFNUM_SIZE: usize = ::core::mem::size_of_val(&{ $val });
-        const _OBFNUM_PLAIN: [u8; _OBFNUM_SIZE] = unsafe { ::core::mem::transmute({ $val }) };
+        const _OBFNUM_PLAIN: [u8; _OBFNUM_SIZE] = { $val }.to_ne_bytes();
         const _OBFNUM_KEYSTREAM: [u8; _OBFNUM_SIZE] = $crate::bytes::keystream::<_OBFNUM_SIZE>(
             $crate::random!(u32, "obfnum_key", stringify!($val)),
         );
@@ -264,6 +264,10 @@ pub fn deobfuscate<const LEN: usize>(s: &[u8; LEN], k: &[u8; LEN]) -> [u8; LEN] 
     // Use `read_volatile` to avoid constant folding a specific read and optimize the rest
     // Volatile reads of any size larger than 8 bytes appears to cause a bunch of one byte reads
     // Hand optimize in chunks of 8 and 4 bytes to avoid this
+    // SAFETY: s and buf are valid references of the same length LEN.
+    // All pointer offsets are bounded by LEN (guaranteed by the while conditions and match arm).
+    // read_volatile and write operate on properly aligned types matching the [u8] element type.
+    // No data races: buf is a local stack variable, s is a shared reference.
     unsafe {
         let src = s.as_ptr();
         let dest = buf.as_mut_ptr();
@@ -455,4 +459,243 @@ fn test_obfstr_const() {
 
     assert_eq!(obfbytes!(ABC.as_bytes()), "ABC".as_bytes());
     assert_eq!(obfbytes!(WORLD.as_bytes()), "🌍".as_bytes());
+}
+
+#[test]
+fn test_obfstring() {
+    let s = obfstring!("Hello");
+    assert_eq!(s, "Hello");
+    assert_eq!(s.len(), 5);
+    // Empty string
+    assert_eq!(obfstring!(""), "");
+}
+
+#[test]
+fn test_obfstr_empty() {
+    assert_eq!(obfstr!(""), "");
+    assert_eq!(obfbytes!(b""), b"");
+}
+
+#[test]
+fn test_zero_lengths() {
+    // keystream with LEN=0
+    let k: [u8; 0] = keystream::<0>(42);
+    assert_eq!(k.len(), 0);
+    // deobfuscate with LEN=0
+    let s: [u8; 0] = [];
+    let k: [u8; 0] = [];
+    let result: [u8; 0] = deobfuscate::<0>(&s, &k);
+    assert_eq!(result.len(), 0);
+}
+
+#[test]
+fn test_obfnum_types() {
+    // Unsigned integers — zero values
+    assert_eq!(
+        {
+            let v: u8 = obfnum!(0u8);
+            v
+        },
+        0u8
+    );
+    assert_eq!(
+        {
+            let v: u16 = obfnum!(0u16);
+            v
+        },
+        0u16
+    );
+    assert_eq!(
+        {
+            let v: u32 = obfnum!(0u32);
+            v
+        },
+        0u32
+    );
+    assert_eq!(
+        {
+            let v: u64 = obfnum!(0u64);
+            v
+        },
+        0u64
+    );
+    assert_eq!(
+        {
+            let v: u128 = obfnum!(0u128);
+            v
+        },
+        0u128
+    );
+    assert_eq!(
+        {
+            let v: usize = obfnum!(0usize);
+            v
+        },
+        0usize
+    );
+    // Unsigned integers — max values
+    assert_eq!(
+        {
+            let v: u8 = obfnum!(255u8);
+            v
+        },
+        255u8
+    );
+    assert_eq!(
+        {
+            let v: u16 = obfnum!(0xABCDu16);
+            v
+        },
+        0xABCDu16
+    );
+    assert_eq!(
+        {
+            let v: u32 = obfnum!(0xDEADBEEFu32);
+            v
+        },
+        0xDEADBEEFu32
+    );
+    assert_eq!(
+        {
+            let v: u64 = obfnum!(u64::MAX);
+            v
+        },
+        u64::MAX
+    );
+    assert_eq!(
+        {
+            let v: u128 = obfnum!(u128::MAX);
+            v
+        },
+        u128::MAX
+    );
+    // Signed integers — zero
+    assert_eq!(
+        {
+            let v: i8 = obfnum!(0i8);
+            v
+        },
+        0i8
+    );
+    assert_eq!(
+        {
+            let v: i16 = obfnum!(0i16);
+            v
+        },
+        0i16
+    );
+    assert_eq!(
+        {
+            let v: i32 = obfnum!(0i32);
+            v
+        },
+        0i32
+    );
+    assert_eq!(
+        {
+            let v: i64 = obfnum!(0i64);
+            v
+        },
+        0i64
+    );
+    assert_eq!(
+        {
+            let v: i128 = obfnum!(0i128);
+            v
+        },
+        0i128
+    );
+    assert_eq!(
+        {
+            let v: isize = obfnum!(0isize);
+            v
+        },
+        0isize
+    );
+    // Signed integers — negative and extreme values
+    assert_eq!(
+        {
+            let v: i8 = obfnum!(-128i8);
+            v
+        },
+        -128i8
+    );
+    assert_eq!(
+        {
+            let v: i8 = obfnum!(127i8);
+            v
+        },
+        127i8
+    );
+    assert_eq!(
+        {
+            let v: i32 = obfnum!(-1i32);
+            v
+        },
+        -1i32
+    );
+    assert_eq!(
+        {
+            let v: i32 = obfnum!(i32::MIN);
+            v
+        },
+        i32::MIN
+    );
+    assert_eq!(
+        {
+            let v: i32 = obfnum!(i32::MAX);
+            v
+        },
+        i32::MAX
+    );
+    // Floats
+    assert_eq!(
+        {
+            let v: f32 = obfnum!(0.0f32);
+            v
+        },
+        0.0f32
+    );
+    assert_eq!(
+        {
+            let v: f32 = obfnum!(1.0f32);
+            v
+        },
+        1.0f32
+    );
+    assert_eq!(
+        {
+            let v: f32 = obfnum!(-1.0f32);
+            v
+        },
+        -1.0f32
+    );
+    assert_eq!(
+        {
+            let v: f64 = obfnum!(0.0f64);
+            v
+        },
+        0.0f64
+    );
+    assert_eq!(
+        {
+            let v: f64 = obfnum!(1.0f64);
+            v
+        },
+        1.0f64
+    );
+    assert_eq!(
+        {
+            let v: f64 = obfnum!(f64::INFINITY);
+            v
+        },
+        f64::INFINITY
+    );
+    assert_eq!(
+        {
+            let v: f64 = obfnum!(f64::NEG_INFINITY);
+            v
+        },
+        f64::NEG_INFINITY
+    );
 }

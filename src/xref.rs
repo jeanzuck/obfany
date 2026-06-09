@@ -85,10 +85,11 @@ pub fn xref<T: ?Sized, const OFFSET: u32, const SEED: u64>(p: &'static T) -> &'s
 ///
 /// ```
 /// static mut FOO: i32 = 42;
-/// let foo = obfany::xref_mut!(unsafe { &mut FOO });
+/// // Use &raw mut to avoid creating a reference to mutable static directly (Rust 2024 compat)
+/// let foo = obfany::xref_mut!(unsafe { &mut *(&raw mut FOO) });
 ///
 /// // When looking at the disassembly the reference to `FOO` has been obfuscated.
-/// assert_eq!(foo as *mut _, unsafe { &mut FOO } as *mut _);
+/// assert_eq!(foo as *mut _, unsafe { &raw mut FOO } as *mut _);
 /// ```
 #[macro_export]
 macro_rules! xref_mut {

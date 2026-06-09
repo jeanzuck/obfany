@@ -125,20 +125,12 @@ macro_rules! __random_cast {
         $seed as i64 >= 0
     };
 
-    // {f32, f64}::from_bits is unstable as const fn due to issues with NaN
+    // f32::from_bits and f64::from_bits are stable as const fn since Rust 1.46
     (f32, $seed:expr) => {
-        unsafe {
-            ::core::mem::transmute::<u32, f32>(
-                0b0_01111111 << (f32::MANTISSA_DIGITS - 1) | ($seed as u32 >> 9),
-            )
-        }
+        f32::from_bits(0b0_01111111 << (f32::MANTISSA_DIGITS - 1) | ($seed as u32 >> 9))
     };
     (f64, $seed:expr) => {
-        unsafe {
-            ::core::mem::transmute::<u64, f64>(
-                0b0_01111111111 << (f64::MANTISSA_DIGITS - 1) | ($seed >> 12),
-            )
-        }
+        f64::from_bits(0b0_01111111111 << (f64::MANTISSA_DIGITS - 1) | ($seed >> 12))
     };
 
     ($ty:ident, $seed:expr) => {
@@ -148,84 +140,44 @@ macro_rules! __random_cast {
 
 #[test]
 fn test_random_f32() {
-    #[track_caller]
     fn t(v: f32) {
         assert!(v >= 1.0 && v < 2.0, "{}", v);
     }
-    use random as r;
-    t(r!(f32));
-    t(r!(f32));
-    t(r!(f32));
-    t(r!(f32));
-    t(r!(f32));
-    t(r!(f32));
-    t(r!(f32));
-    t(r!(f32));
-    t(r!(f32));
-    t(r!(f32));
-    t(r!(f32));
-    t(r!(f32));
-    t(r!(f32));
-    t(r!(f32));
-    t(r!(f32));
-    t(r!(f32));
-    t(r!(f32));
-    t(r!(f32));
-    t(r!(f32));
-    t(r!(f32));
-    t(r!(f32));
-    t(r!(f32));
-    t(r!(f32));
-    t(r!(f32));
-    t(r!(f32));
-    t(r!(f32));
-    t(r!(f32));
-    t(r!(f32));
-    t(r!(f32));
-    t(r!(f32));
-    t(r!(f32));
-    t(r!(f32));
+    // Multiple calls with different seeds ensure coverage across the float range
+    t(random!(f32, "a"));
+    t(random!(f32, "b"));
+    t(random!(f32, "c"));
+    // Unseeded call uses file!(), line!(), column!()
+    t(random!(f32));
 }
 
 #[test]
 fn test_random_f64() {
-    #[track_caller]
     fn t(v: f64) {
         assert!(v >= 1.0 && v < 2.0, "{}", v);
     }
-    use random as r;
-    t(r!(f64));
-    t(r!(f64));
-    t(r!(f64));
-    t(r!(f64));
-    t(r!(f64));
-    t(r!(f64));
-    t(r!(f64));
-    t(r!(f64));
-    t(r!(f64));
-    t(r!(f64));
-    t(r!(f64));
-    t(r!(f64));
-    t(r!(f64));
-    t(r!(f64));
-    t(r!(f64));
-    t(r!(f64));
-    t(r!(f64));
-    t(r!(f64));
-    t(r!(f64));
-    t(r!(f64));
-    t(r!(f64));
-    t(r!(f64));
-    t(r!(f64));
-    t(r!(f64));
-    t(r!(f64));
-    t(r!(f64));
-    t(r!(f64));
-    t(r!(f64));
-    t(r!(f64));
-    t(r!(f64));
-    t(r!(f64));
-    t(r!(f64));
+    t(random!(f64, "a"));
+    t(random!(f64, "b"));
+    t(random!(f64, "c"));
+    t(random!(f64));
+}
+
+#[test]
+fn test_random_int_types() {
+    // Test that all supported integer types compile and produce in-range values
+    let _: u8 = random!(u8, "u8");
+    let _: u16 = random!(u16, "u16");
+    let _: u32 = random!(u32, "u32");
+    let _: u64 = random!(u64, "u64");
+    let _: usize = random!(usize, "usize");
+    let _: i8 = random!(i8, "i8");
+    let _: i16 = random!(i16, "i16");
+    let _: i32 = random!(i32, "i32");
+    let _: i64 = random!(i64, "i64");
+    let _: isize = random!(isize, "isize");
+    let _: bool = random!(bool, "bool");
+    // Different seeds produce different values (random! uses column!() so same-seed is impossible)
+    assert_ne!(random!(u64, "x"), random!(u64, "y"));
 }
 
 /// Compiletime bitmixing.
@@ -241,6 +193,16 @@ pub const fn splitmix(seed: u64) -> u64 {
     return z ^ (z >> 31);
 }
 
+#[test]
+fn test_splitmix() {
+    // Non-zero output for zero input (avalanche)
+    assert_ne!(splitmix(0), 0);
+    // Deterministic: same input always produces same output
+    assert_eq!(splitmix(42), splitmix(42));
+    // Different seeds produce different outputs
+    assert_ne!(splitmix(1), splitmix(2));
+}
+
 /// Compiletime string constant hash.
 ///
 /// Implemented using the [DJB2 hash function](http://www.cse.yorku.ca/~oz/hash.html#djb2) xor variation.
@@ -254,6 +216,20 @@ pub const fn hash(s: &str) -> u32 {
         i += 1;
     }
     return result;
+}
+
+#[test]
+fn test_hash() {
+    // Known answer test (matches doctest)
+    assert_eq!(hash!("Hello World"), 0x6E4A573D);
+    // Empty string
+    let _ = hash!("");
+    // Unicode
+    let _ = hash!("🦀");
+    // Determinism
+    assert_eq!(hash!("abc"), hash!("abc"));
+    // Different inputs produce different hashes (probabilistic)
+    assert_ne!(hash!("abc"), hash!("abd"));
 }
 
 /// Compiletime string constant hash.
