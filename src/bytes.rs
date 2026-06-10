@@ -147,7 +147,36 @@ macro_rules! obfnum {
             >(&_OBFNUM_SDATA),
             &_OBFNUM_KEYSTREAM,
         );
-        unsafe { $crate::bytes::transmute_number_like(|| { $val }, _obfnum_deobf) }
+        unsafe { $crate::bytes::transmute_number_like(|| $val, _obfnum_deobf) }
+    }};
+}
+
+/// Compiletime boolean constant obfuscation.
+///
+/// Stores a boolean constant in XOR-encrypted form inside the binary.
+/// The plaintext value is only reconstructed at runtime.
+///
+/// ```
+/// assert_eq!(obfany::obfbool!(true), true);
+/// assert_eq!(obfany::obfbool!(false), false);
+/// ```
+#[macro_export]
+macro_rules! obfbool {
+    ($val:expr) => {{
+        const _OBFBOOL_PLAIN: [u8; 1] = [if $val { 1 } else { 0 }];
+        const _OBFBOOL_KEYSTREAM: [u8; 1] =
+            $crate::bytes::keystream::<1>($crate::random!(u32, "obfbool_key", stringify!($val)));
+        static _OBFBOOL_SDATA: [u8; 1] =
+            $crate::bytes::obfuscate::<1>(&_OBFBOOL_PLAIN, &_OBFBOOL_KEYSTREAM);
+        let _obfbool_deobf: [u8; 1] = $crate::bytes::deobfuscate::<1>(
+            $crate::xref::xref::<
+                _,
+                { $crate::random!(u32, "obfbool_offset", stringify!($val)) },
+                { $crate::random!(u64, "obfbool_xref", stringify!($val)) },
+            >(&_OBFBOOL_SDATA),
+            &_OBFBOOL_KEYSTREAM,
+        );
+        _obfbool_deobf[0] != 0
     }};
 }
 
@@ -719,4 +748,18 @@ fn test_obfnum_types() {
         },
         70
     );
+}
+
+#[test]
+fn test_obfbool() {
+    const FLAG: bool = true;
+
+    assert!(obfbool!(true));
+    assert!(!obfbool!(false));
+
+    let b: bool = obfbool!(FLAG);
+    assert!(b);
+
+    let selected = if obfbool!(1 + 1 == 2) { "yes" } else { "no" };
+    assert_eq!(selected, "yes");
 }

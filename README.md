@@ -1,6 +1,6 @@
 # obfany
 
-> Forked from [obfstr](https://github.com/CasualX/obfstr) by CasualX — extended with `obfnum!`,
+> Forked from [obfstr](https://github.com/CasualX/obfstr) by CasualX — extended with `obfnum!` and `obfbool!`,
 > modernised to Rust 2024 edition (1.85+), and expanded test coverage.
 
 [![Rust](https://img.shields.io/badge/rust-stable%201.85+-orange.svg)](https://www.rust-lang.org)
@@ -8,7 +8,7 @@
 [![crates.io](https://img.shields.io/crates/v/obfany.svg)](https://crates.io/crates/obfany)
 [![docs.rs](https://docs.rs/obfany/badge.svg)](https://docs.rs/obfany)
 
-Compiletime string and number constant obfuscation for Rust — `no_std` and zero dependencies.
+Compiletime string, number, and boolean constant obfuscation for Rust — `no_std` and zero dependencies.
 
 Values are stored XOR-encrypted in the binary and decrypted locally at runtime. Static analysis tools
 see only ciphertext — plaintext constants never appear in the data section.
@@ -30,6 +30,10 @@ assert_eq!(s!("Hello 🌍"), "Hello 🌍");
 // Numbers are stored XOR-encrypted
 let secret: u32 = obfany::obfnum!(0xDEAD_BEEF_u32);
 assert_eq!(secret, 0xDEAD_BEEF_u32);
+
+// Booleans are stored XOR-encrypted too
+let enabled: bool = obfany::obfbool!(true);
+assert!(enabled);
 
 // Compiletime random values
 const SALT: u64 = obfany::random!(u64);
@@ -139,6 +143,17 @@ assert_eq!(obfnum!(1.0_f32),             1.0_f32);
 
 Supported types: `u8`, `u16`, `u32`, `u64`, `u128`, `usize`,
 `i8`, `i16`, `i32`, `i64`, `i128`, `isize`, `f32`, `f64`.
+
+### Boolean Obfuscation — `obfbool!`
+
+XOR-encrypts a boolean constant.
+
+```rust
+use obfany::obfbool;
+
+assert!(obfbool!(true));
+assert!(!obfbool!(false));
+```
 
 ### Compiletime Random — `random!`
 
@@ -284,6 +299,7 @@ identical binaries.
 | `obfbytes!` | (same forms) → `&[u8]` | Obfuscate a byte slice |
 | `obfwide!` | (same forms) → `&[u16]` | Obfuscate a UTF-16 string |
 | `obfnum!` | `($val:expr)` → `T` | Obfuscate a numeric literal |
+| `obfbool!` | `($val:expr)` → `bool` | Obfuscate a boolean constant |
 | `random!` | `($ty $(, $seed)*)` → `T` | Compiletime random value |
 | `wide!` | `($s:expr)` → `&[u16; N]` | UTF-16 encode at compile time |
 | `obfstmt!` | `{ $($stmt;)* }` | Control flow obfuscation |
@@ -390,10 +406,11 @@ Forked from [obfstr](https://github.com/CasualX/obfstr) by [CasualX](https://git
 Changes from upstream:
 - Renamed crate to `obfany`
 - Added `obfnum!` for numeric constant obfuscation
+- Added `obfbool!` for boolean constant obfuscation
 - Added compiletime key-collision detection in `obfstmt!`
 - Replaced `transmute` with `from_bits` / `to_ne_bytes` (Rust 1.85+)
 - Added SAFETY comments to all unsafe blocks
-- Expanded test coverage (26 unit + 15 doc tests)
+- Expanded test coverage (27 unit + 16 doc tests)
 
 ---
 
