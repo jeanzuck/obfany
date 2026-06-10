@@ -147,7 +147,7 @@ macro_rules! obfnum {
             >(&_OBFNUM_SDATA),
             &_OBFNUM_KEYSTREAM,
         );
-        unsafe { ::core::mem::transmute_copy(&_obfnum_deobf) }
+        unsafe { $crate::bytes::transmute_number_like(|| { $val }, _obfnum_deobf) }
     }};
 }
 
@@ -322,6 +322,20 @@ pub fn deobfuscate<const LEN: usize>(s: &[u8; LEN], k: &[u8; LEN]) -> [u8; LEN] 
         }
     }
     return buf;
+}
+
+#[doc(hidden)]
+#[inline(always)]
+pub unsafe fn transmute_number_like<T, F, const LEN: usize>(_: F, bytes: [u8; LEN]) -> T
+where
+    F: FnOnce() -> T,
+{
+    assert!(::core::mem::size_of::<T>() == LEN);
+    let mut value = ::core::mem::MaybeUninit::<T>::uninit();
+    unsafe {
+        ::core::ptr::copy_nonoverlapping(bytes.as_ptr(), value.as_mut_ptr() as *mut u8, LEN);
+        value.assume_init()
+    }
 }
 
 #[inline(always)]
@@ -697,5 +711,12 @@ fn test_obfnum_types() {
             v
         },
         f64::NEG_INFINITY
+    );
+    assert_eq!(
+        {
+            let x = 50;
+            x + obfnum!(20_i32)
+        },
+        70
     );
 }
