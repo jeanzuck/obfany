@@ -28,7 +28,7 @@ use obfany::obfstr as s;
 assert_eq!(s!("Hello 🌍"), "Hello 🌍");
 
 // Numbers are stored XOR-encrypted
-let secret: u32 = obfany::obfnum!(0xDEAD_BEEF_u32);
+let secret = obfany::obfnum!(u32, 0xDEAD_BEEF);
 assert_eq!(secret, 0xDEAD_BEEF_u32);
 
 // Booleans are stored XOR-encrypted too
@@ -126,19 +126,21 @@ assert_eq!(obfwide!("Wide"), obfany::wide!("Wide"));
 
 ### Number Obfuscation — `obfnum!`
 
-XOR-encrypts an integer or float constant. Always use a typed literal suffix.
+XOR-encrypts an integer or float constant. Pass the concrete primitive type first,
+then the constant value. This lets unsuffixed literals work while still giving the
+macro the exact byte width it needs at compile time.
 
 ```rust
 use obfany::obfnum;
 
 // Integers
-assert_eq!(obfnum!(0x1234_u32),   0x1234_u32);
-assert_eq!(obfnum!(-9999_i64),   -9999_i64);
-assert_eq!(obfnum!(u128::MAX),    u128::MAX);
+assert_eq!(obfnum!(u32, 0x1234), 0x1234_u32);
+assert_eq!(obfnum!(i64, -9999), -9999_i64);
+assert_eq!(obfnum!(u128, u128::MAX), u128::MAX);
 
 // Floats
-assert_eq!(obfnum!(3.14159265358979_f64), std::f64::consts::PI);
-assert_eq!(obfnum!(1.0_f32),             1.0_f32);
+assert_eq!(obfnum!(f64, 3.14159265358979), std::f64::consts::PI);
+assert_eq!(obfnum!(f32, 1.0), 1.0_f32);
 ```
 
 Supported types: `u8`, `u16`, `u32`, `u64`, `u128`, `usize`,
@@ -298,7 +300,7 @@ identical binaries.
 | `obfstring!` | `($s:expr)` → `String` | Obfuscate into owned `String` |
 | `obfbytes!` | (same forms) → `&[u8]` | Obfuscate a byte slice |
 | `obfwide!` | (same forms) → `&[u16]` | Obfuscate a UTF-16 string |
-| `obfnum!` | `($val:expr)` → `T` | Obfuscate a numeric literal |
+| `obfnum!` | `($ty, $val:expr)` → `$ty` | Obfuscate a numeric constant |
 | `obfbool!` | `($val:expr)` → `bool` | Obfuscate a boolean constant |
 | `random!` | `($ty $(, $seed)*)` → `T` | Compiletime random value |
 | `wide!` | `($s:expr)` → `&[u16; N]` | UTF-16 encode at compile time |

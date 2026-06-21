@@ -116,38 +116,40 @@ macro_rules! obfstring {
 /// Works with all primitive numeric types: `u8`, `u16`, `u32`, `u64`, `u128`,
 /// `i8`, `i16`, `i32`, `i64`, `i128`, `usize`, `isize`, `f32`, `f64`.
 ///
-/// Always use a typed literal suffix to ensure the size matches the expected return type.
+/// Pass the concrete primitive type first so the macro knows the byte width before
+/// Rust's surrounding expression type inference runs.
 ///
 /// ```
-/// let secret: u32 = obfany::obfnum!(0x1234_u32);
+/// let secret = obfany::obfnum!(u32, 0x1234);
 /// assert_eq!(secret, 0x1234_u32);
 ///
-/// let score: i64 = obfany::obfnum!(-9999_i64);
+/// let score = obfany::obfnum!(i64, -9999);
 /// assert_eq!(score, -9999_i64);
 ///
-/// let pi: f64 = obfany::obfnum!(3.14159265358979_f64);
+/// let pi = obfany::obfnum!(f64, 3.14159265358979);
 /// assert!((pi - std::f64::consts::PI).abs() < 1e-10);
 /// ```
 #[macro_export]
 macro_rules! obfnum {
-    ($val:expr) => {{
+    ($ty:ty, $val:expr $(,)?) => {{
         use ::core::primitive::*;
-        const _OBFNUM_SIZE: usize = ::core::mem::size_of_val(&{ $val });
-        const _OBFNUM_PLAIN: [u8; _OBFNUM_SIZE] = { $val }.to_ne_bytes();
+        const _OBFNUM_VALUE: $ty = $val;
+        const _OBFNUM_SIZE: usize = ::core::mem::size_of::<$ty>();
+        const _OBFNUM_PLAIN: [u8; _OBFNUM_SIZE] = _OBFNUM_VALUE.to_ne_bytes();
         const _OBFNUM_KEYSTREAM: [u8; _OBFNUM_SIZE] = $crate::bytes::keystream::<_OBFNUM_SIZE>(
-            $crate::random!(u32, "obfnum_key", stringify!($val)),
+            $crate::random!(u32, "obfnum_key", stringify!($ty), stringify!($val)),
         );
         static _OBFNUM_SDATA: [u8; _OBFNUM_SIZE] =
             $crate::bytes::obfuscate::<_OBFNUM_SIZE>(&_OBFNUM_PLAIN, &_OBFNUM_KEYSTREAM);
         let _obfnum_deobf: [u8; _OBFNUM_SIZE] = $crate::bytes::deobfuscate::<_OBFNUM_SIZE>(
             $crate::xref::xref::<
                 _,
-                { $crate::random!(u32, "obfnum_offset", stringify!($val)) },
-                { $crate::random!(u64, "obfnum_xref", stringify!($val)) },
+                { $crate::random!(u32, "obfnum_offset", stringify!($ty), stringify!($val)) },
+                { $crate::random!(u64, "obfnum_xref", stringify!($ty), stringify!($val)) },
             >(&_OBFNUM_SDATA),
             &_OBFNUM_KEYSTREAM,
         );
-        unsafe { $crate::bytes::transmute_number_like(|| $val, _obfnum_deobf) }
+        unsafe { $crate::bytes::transmute_number_like(|| _OBFNUM_VALUE, _obfnum_deobf) }
     }};
 }
 
@@ -533,221 +535,57 @@ fn test_zero_lengths() {
 
 #[test]
 fn test_obfnum_types() {
-    // Unsigned integers — zero values
-    assert_eq!(
-        {
-            let v: u8 = obfnum!(0u8);
-            v
-        },
-        0u8
-    );
-    assert_eq!(
-        {
-            let v: u16 = obfnum!(0u16);
-            v
-        },
-        0u16
-    );
-    assert_eq!(
-        {
-            let v: u32 = obfnum!(0u32);
-            v
-        },
-        0u32
-    );
-    assert_eq!(
-        {
-            let v: u64 = obfnum!(0u64);
-            v
-        },
-        0u64
-    );
-    assert_eq!(
-        {
-            let v: u128 = obfnum!(0u128);
-            v
-        },
-        0u128
-    );
-    assert_eq!(
-        {
-            let v: usize = obfnum!(0usize);
-            v
-        },
-        0usize
-    );
-    // Unsigned integers — max values
-    assert_eq!(
-        {
-            let v: u8 = obfnum!(255u8);
-            v
-        },
-        255u8
-    );
-    assert_eq!(
-        {
-            let v: u16 = obfnum!(0xABCDu16);
-            v
-        },
-        0xABCDu16
-    );
-    assert_eq!(
-        {
-            let v: u32 = obfnum!(0xDEADBEEFu32);
-            v
-        },
-        0xDEADBEEFu32
-    );
-    assert_eq!(
-        {
-            let v: u64 = obfnum!(u64::MAX);
-            v
-        },
-        u64::MAX
-    );
-    assert_eq!(
-        {
-            let v: u128 = obfnum!(u128::MAX);
-            v
-        },
-        u128::MAX
-    );
-    // Signed integers — zero
-    assert_eq!(
-        {
-            let v: i8 = obfnum!(0i8);
-            v
-        },
-        0i8
-    );
-    assert_eq!(
-        {
-            let v: i16 = obfnum!(0i16);
-            v
-        },
-        0i16
-    );
-    assert_eq!(
-        {
-            let v: i32 = obfnum!(0i32);
-            v
-        },
-        0i32
-    );
-    assert_eq!(
-        {
-            let v: i64 = obfnum!(0i64);
-            v
-        },
-        0i64
-    );
-    assert_eq!(
-        {
-            let v: i128 = obfnum!(0i128);
-            v
-        },
-        0i128
-    );
-    assert_eq!(
-        {
-            let v: isize = obfnum!(0isize);
-            v
-        },
-        0isize
-    );
-    // Signed integers — negative and extreme values
-    assert_eq!(
-        {
-            let v: i8 = obfnum!(-128i8);
-            v
-        },
-        -128i8
-    );
-    assert_eq!(
-        {
-            let v: i8 = obfnum!(127i8);
-            v
-        },
-        127i8
-    );
-    assert_eq!(
-        {
-            let v: i32 = obfnum!(-1i32);
-            v
-        },
-        -1i32
-    );
-    assert_eq!(
-        {
-            let v: i32 = obfnum!(i32::MIN);
-            v
-        },
-        i32::MIN
-    );
-    assert_eq!(
-        {
-            let v: i32 = obfnum!(i32::MAX);
-            v
-        },
-        i32::MAX
-    );
+    macro_rules! assert_obfnum_eq {
+        ($ty:ty, $value:expr) => {{
+            const EXPECTED: $ty = $value;
+            let v = obfnum!($ty, $value);
+            assert_eq!(v, EXPECTED);
+        }};
+    }
+
+    // Unsigned integers
+    assert_obfnum_eq!(u8, 0);
+    assert_obfnum_eq!(u16, 0);
+    assert_obfnum_eq!(u32, 0);
+    assert_obfnum_eq!(u64, 0);
+    assert_obfnum_eq!(u128, 0);
+    assert_obfnum_eq!(usize, 0);
+    assert_obfnum_eq!(u8, 255);
+    assert_obfnum_eq!(u16, 0xABCD);
+    assert_obfnum_eq!(u32, 0xDEADBEEF);
+    assert_obfnum_eq!(u64, u64::MAX);
+    assert_obfnum_eq!(u128, u128::MAX);
+    assert_obfnum_eq!(usize, usize::MAX);
+
+    // Signed integers
+    assert_obfnum_eq!(i8, 0);
+    assert_obfnum_eq!(i16, 0);
+    assert_obfnum_eq!(i32, 0);
+    assert_obfnum_eq!(i64, 0);
+    assert_obfnum_eq!(i128, 0);
+    assert_obfnum_eq!(isize, 0);
+    assert_obfnum_eq!(i8, -128);
+    assert_obfnum_eq!(i8, 127);
+    assert_obfnum_eq!(i32, -1);
+    assert_obfnum_eq!(i32, i32::MIN);
+    assert_obfnum_eq!(i32, i32::MAX);
+    assert_obfnum_eq!(i128, i128::MIN);
+    assert_obfnum_eq!(isize, isize::MIN);
+
     // Floats
-    assert_eq!(
-        {
-            let v: f32 = obfnum!(0.0f32);
-            v
-        },
-        0.0f32
-    );
-    assert_eq!(
-        {
-            let v: f32 = obfnum!(1.0f32);
-            v
-        },
-        1.0f32
-    );
-    assert_eq!(
-        {
-            let v: f32 = obfnum!(-1.0f32);
-            v
-        },
-        -1.0f32
-    );
-    assert_eq!(
-        {
-            let v: f64 = obfnum!(0.0f64);
-            v
-        },
-        0.0f64
-    );
-    assert_eq!(
-        {
-            let v: f64 = obfnum!(1.0f64);
-            v
-        },
-        1.0f64
-    );
-    assert_eq!(
-        {
-            let v: f64 = obfnum!(f64::INFINITY);
-            v
-        },
-        f64::INFINITY
-    );
-    assert_eq!(
-        {
-            let v: f64 = obfnum!(f64::NEG_INFINITY);
-            v
-        },
-        f64::NEG_INFINITY
-    );
-    assert_eq!(
-        {
-            let x = 50;
-            x + obfnum!(20_i32)
-        },
-        70
-    );
+    assert_obfnum_eq!(f32, 0.0);
+    assert_obfnum_eq!(f32, 1.0);
+    assert_obfnum_eq!(f32, -1.0);
+    assert_obfnum_eq!(f64, 0.0);
+    assert_obfnum_eq!(f64, 1.0);
+    assert_obfnum_eq!(f64, f64::INFINITY);
+    assert_obfnum_eq!(f64, f64::NEG_INFINITY);
+
+    let inferred = obfnum!(u32, 20);
+    assert_eq!(inferred, 20u32);
+
+    let x = 50;
+    assert_eq!(x + obfnum!(i32, 20), 70);
 }
 
 #[test]
